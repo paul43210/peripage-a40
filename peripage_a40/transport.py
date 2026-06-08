@@ -40,6 +40,14 @@ class RfcommTransport:
         s.settimeout(self.connect_timeout)
         try:
             s.connect((self.mac, self.channel))
+        except (socket.timeout, TimeoutError) as e:
+            # On some adapters (e.g. the Sena UD100) an off/asleep printer makes
+            # connect() hang to the socket timeout (errno None) instead of
+            # refusing fast. Treat that as "asleep", not a transport error.
+            s.close()
+            raise PrinterAsleep(
+                "Printer is off or asleep -- press its power/feed button "
+                "to wake it, then try again.") from e
         except OSError as e:
             s.close()
             if e.errno in _ASLEEP_ERRNOS:
