@@ -1,0 +1,22 @@
+[project]
+name = "peripage-a40"
+version = "0.1.0"
+description = "App-free, cloud-free printing for the PeriPage A40 thermal printer using its native page-mode protocol (optical black-mark alignment)."
+readme = "README.md"
+authors = [{ name = "Paul Faure" }, { name = "Claude (Anthropic)" }]
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = ["pillow>=10", "pypdfium2>=4"]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+peripage-a40 = "peripage_a40.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["peripage_a40*"]
