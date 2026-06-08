@@ -11,9 +11,10 @@ alignment, no perforation registration. This project speaks the app's private
 `1f` page-mode family instead, which was reverse-engineered from a Bluetooth
 HCI capture and validated on real hardware.
 
-> Status: **core validated on hardware** (single generated page: top-of-form
-> seek + print + perforation alignment all correct). PDF pipeline + Home
-> Assistant add-on web UI in progress.
+> Status: **validated on hardware.** Single- and multi-page PDFs print with
+> correct top-of-form seek and perforation registration; battery level can be
+> queried over Bluetooth. Used in production by the Home Assistant add-on
+> [`paul43210/ha-peripage-a40`](https://github.com/paul43210/ha-peripage-a40).
 
 ## Protocol (page image block)
 
@@ -73,3 +74,36 @@ See [docs/REVERSE-ENGINEERING.md](docs/REVERSE-ENGINEERING.md) for the full reve
 
 Protocol reverse-engineering and implementation by **Paul Faure** with
 **Claude (Anthropic)**. MIT licensed.
+
+## Status queries
+
+After connecting, the printer needs its reset/init sequence before it will
+reply, then answers simple `10 ff …` queries:
+
+```python
+from peripage_a40 import get_battery
+pct = get_battery("04:7F:0E:B0:45:18")   # -> int 0..100, or None if unreadable
+```
+
+`get_battery()` connects, sends the reset sequence, queries `10ff50f1`, and
+returns the battery percentage (the printer replies with two bytes
+`{0x00, percent}`). It raises `PrinterAsleep` if the printer is off/asleep.
+
+## Print quality
+
+The printer's native width (1648 px / 206 bytes per row) is the hardware
+resolution ceiling. Print **concentration/density** ranges `0–2`; this library
+uses **2 (maximum)** in the job prelude, which is the darkest/highest-quality
+setting the A40 offers. Grayscale is Floyd–Steinberg dithered; solid black text
+stays crisp.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+## Acknowledgements
+
+The `1f` page-mode format was reverse-engineered independently for this project.
+The simple `10ff…` status-query opcodes (battery, name, firmware) are the same
+ones documented by the GPLv3 [`bitrate16/peripage-python`](https://github.com/bitrate16/peripage-python)
+project; this library is a clean-room reimplementation and shares no code with it.
