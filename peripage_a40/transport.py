@@ -22,6 +22,10 @@ DEFAULT_CHANNEL = 1
 _ASLEEP_ERRNOS = {errno.EHOSTDOWN, errno.ETIMEDOUT, errno.ECONNREFUSED,
                   getattr(errno, "EHOSTUNREACH", 113), 112}
 
+# Printer control sequences (Peripage 10ff.. family).
+RESET = bytes.fromhex("10fffe01" + "00" * 12)
+BATTERY_QUERY = bytes.fromhex("10ff50f1")
+
 
 class RfcommTransport:
     def __init__(self, mac: str, channel: int = DEFAULT_CHANNEL,
@@ -72,6 +76,28 @@ class RfcommTransport:
             raise TransportError(
                 "Printer stopped accepting data (out of paper or jammed?).") from e
 
+    def ask(self, data: bytes, recv_size: int = 64,
+            reply_timeout: float = 3.0) -> bytes:
+        """Send a query and return the printer's reply bytes."""
+        if self.sock is None:
+            raise TransportError("not connected")
+        self.sock.sendall(data)
+        prev = self.sock.gettimeout()
+        self.sock.settimeout(reply_timeout)
+        try:
+            return self.sock.recv(recv_size)
+        except (socket.timeout, TimeoutError) as e:
+            raise TransportError("no reply from printer") from e
+        finally:
+            try:
+                self.sock.settimeout(prev)
+            except OSError:
+                pass
+
+    def reset(self) -> None:
+        """Init sequence the printer needs after connect before it replies."""
+        self.send(RESET)
+
     def close(self) -> None:
         if self.sock is not None:
             try:
@@ -85,3 +111,29 @@ class RfcommTransport:
 
     def __exit__(self, *exc):
         self.close()
+
+
+def get_battery(mac: str, channel: int = DEFAULT_CHANNEL,
+                connect_timeout: float = 10.0):
+    """Return the printer battery percentage (int 0-100).
+
+    Returns ``None`` if the printer connected but gave no readable value.
+    Raises ``PrinterAsleep`` if the printer is off/asleep/out of range, or
+    ``TransportError`` for other connection failures.
+
+    Protocol: after connect, send the reset/init sequence, then query
+    ``10ff50f1``; the printer replies with two bytes ``{0, percent}``.
+    """
+    t = RfcommTransport(mac, channel=channel, connect_timeout=connect_timeout)
+    t.connect()  # raises PrinterAsleep / TransportError if not connectable
+    try:
+        t.reset()
+        time.sleep(0.1)
+        resp = t.ask(BATTERY_QUERY, recv_size=16)
+    except Exception:
+        return None
+    finally:
+        t.close()
+    if len(resp) >= 2 and 0 <= resp[1] <= 100:
+        return int(resp[1])
+    return None
