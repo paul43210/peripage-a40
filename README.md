@@ -65,6 +65,10 @@ except PrinterAsleep:
 - The A40 auto-sleeps when idle; a reconnect then fails fast and raises
   `PrinterAsleep` → surface a "press the power/feed button" prompt to the user.
 
+## How it works
+
+See [docs/REVERSE-ENGINEERING.md](docs/REVERSE-ENGINEERING.md) for the full reverse-engineering writeup — capture, RFCOMM parsing, the compression and geometry decode, and hardware validation.
+
 ## Credits
 
 Protocol reverse-engineering and implementation by **Paul Faure** with
