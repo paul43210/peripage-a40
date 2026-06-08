@@ -26,12 +26,13 @@ _ASLEEP_ERRNOS = {errno.EHOSTDOWN, errno.ETIMEDOUT, errno.ECONNREFUSED,
 class RfcommTransport:
     def __init__(self, mac: str, channel: int = DEFAULT_CHANNEL,
                  chunk: int = 180, delay: float = 0.02,
-                 connect_timeout: float = 10.0):
+                 connect_timeout: float = 10.0, send_timeout: float = 30.0):
         self.mac = mac
         self.channel = channel
         self.chunk = chunk
         self.delay = delay
         self.connect_timeout = connect_timeout
+        self.send_timeout = send_timeout
         self.sock = None
 
     def connect(self) -> None:
@@ -55,17 +56,21 @@ class RfcommTransport:
                     "Printer is off or asleep -- press its power/feed button "
                     "to wake it, then try again.") from e
             raise TransportError(f"RFCOMM connect failed: {e}") from e
-        s.settimeout(None)
+        s.settimeout(self.send_timeout)
         self.sock = s
 
     def send(self, data: bytes) -> None:
         if self.sock is None:
             raise TransportError("not connected")
         mv = memoryview(data)
-        for i in range(0, len(mv), self.chunk):
-            self.sock.sendall(mv[i:i + self.chunk])
-            if self.delay:
-                time.sleep(self.delay)
+        try:
+            for i in range(0, len(mv), self.chunk):
+                self.sock.sendall(mv[i:i + self.chunk])
+                if self.delay:
+                    time.sleep(self.delay)
+        except (socket.timeout, TimeoutError) as e:
+            raise TransportError(
+                "Printer stopped accepting data (out of paper or jammed?).") from e
 
     def close(self) -> None:
         if self.sock is not None:
